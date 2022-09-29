@@ -433,7 +433,7 @@ def prnp0f(pkt):
 
 
 def p0f_impersonate(pkt, osgenre=None, osdetails=None, signature=None,
-                    extrahops=0, mtu=1500, uptime=None):
+                    extrahops=0, mtu=1500, uptime=None, verbose=False):
     """Modifies pkt so that p0f will think it has been sent by a
     specific OS. Either osgenre or signature is required to impersonate.
     If signature is specified (as a raw string), we use the signature.
@@ -447,6 +447,7 @@ def p0f_impersonate(pkt, osgenre=None, osdetails=None, signature=None,
     all match the label "s:win:Windows:7 or 8")
 
     For now, only TCP SYN/SYN+ACK packets are supported."""
+
     pkt = validate_packet(pkt)
 
     if not osgenre and not signature:
@@ -455,11 +456,18 @@ def p0f_impersonate(pkt, osgenre=None, osdetails=None, signature=None,
     tcp = pkt[TCP]
     tcp_type = tcp.flags & (TCPFlag.SYN | TCPFlag.ACK)  # SYN / SYN+ACK
 
+    pkt_id=pkt.id
+
+    if verbose==True: print(" [+ id:%s +] tcp flags:" % pkt_id, tcp_type ) 
+
     if signature:
         if isinstance(signature, string_types):
             sig, _ = TCP_Signature.from_raw_sig(signature)
         else:
+            print("got sign")
+            print ("Unsupported signature type")
             raise TypeError("Unsupported signature type")
+
     else:
         if not p0fdb.get_base():
             sigs = []
@@ -470,13 +478,19 @@ def p0f_impersonate(pkt, osgenre=None, osdetails=None, signature=None,
         # If IPv6 packet, remove IPv4-only signatures and vice versa
         sigs = [s for s in sigs if s.ip_ver == -1 or s.ip_ver == pkt.version]
         if not sigs:
+            print ("No match in the p0f database")
             raise ValueError("No match in the p0f database")
         sig = random.choice(sigs)
 
+    if verbose==True:   print(" [+ id:", pkt_id, " +] scapy dest signature: ", sig )
+
+
     if sig.ip_ver != -1 and pkt.version != sig.ip_ver:
+        print ("Can't convert between IPv4 and IPv6")
         raise ValueError("Can't convert between IPv4 and IPv6")
 
     quirks = sig.quirks
+    #print(" [+ id:%s +] scapy dest quirks: %s" % pkt.id, quirks)
 
     if pkt.version == 4:
         pkt.ttl = sig.ttl - extrahops
@@ -514,9 +528,17 @@ def p0f_impersonate(pkt, osgenre=None, osdetails=None, signature=None,
     def int_only(val):
         return val if isinstance(val, integer_types) else None
     orig_opts = dict(tcp.options)
+
+    if verbose==True:   print (" [+id:",pkt_id,"+] orig TCP options", orig_opts)
+    if not orig_opts:
+        raise ValueError("empty TCP options detected in original packet??")
+
     mss_hint = int_only(orig_opts.get("MSS"))
     ws_hint = int_only(orig_opts.get("WScale"))
     ts_hint = [int_only(o) for o in orig_opts.get("Timestamp", (None, None))]
+
+    #if verbose==True:   print(" [+ id:",pkt_id,"+] Orig TCP Timestamp:", ts_hint )
+    if verbose==True:   print(" [+ id:",pkt_id,"+] Orig MSS:", mss_hint )
 
     options = []
     for opt in sig.olayout.split(","):
@@ -567,6 +589,8 @@ def p0f_impersonate(pkt, osgenre=None, osdetails=None, signature=None,
                     ts2 = random.randint(1, 2**32 - 1)
             else:
                 ts2 = 0
+
+            #if verbose==True:   print(" [+id:",pkt_id,"+]  new TCP Timestamp:", (ts1, ts2) )
             options.append(("Timestamp", (ts1, ts2)))
 
         elif opt == "nop":
@@ -586,6 +610,8 @@ def p0f_impersonate(pkt, osgenre=None, osdetails=None, signature=None,
             warning("unhandled TCP option %s", opt)
         tcp.options = options
 
+    if verbose==True:   print(" [+ id:", pkt_id, "+] final TCP options", tcp.options)
+
     if sig.win_type == WinType.NORMAL:
         tcp.window = sig.win
     elif sig.win_type == WinType.MSS:
@@ -601,6 +627,8 @@ def p0f_impersonate(pkt, osgenre=None, osdetails=None, signature=None,
         tcp.window = RandShort()
     else:
         warning("Unhandled window size specification")
+
+    if verbose==True:   print(" [+ id:", pkt_id, "+] final Wsize", tcp.window)
 
     if "seq-" in quirks:
         tcp.seq = 0
