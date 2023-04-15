@@ -580,6 +580,8 @@ def p0f_impersonate(pkt, osgenre=None, osdetails=None, signature=None,
                 ts1 = 0
             elif uptime is not None:  # if specified uptime, override
                 ts1 = uptime
+            elif ts1 == 0:  # if orig TSval is really 0 then keep it 
+                pass
             elif ts1 is None or not (0 < ts1 < 2**32):  # invalid hint
                 ts1 = random.randint(120, 100*60*60*24*365)
 
