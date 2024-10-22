@@ -13,7 +13,7 @@ from scapy.layers.inet6 import IPv6
 from scapy.layers.http import HTTP, HTTPRequest, HTTPResponse
 from scapy.volatile import RandByte, RandShort, RandString
 from scapy.error import warning
-from scapy.modules.six import string_types, integer_types
+from scapy.libs.six import string_types, integer_types
 
 from scapy_p0f.utils import lparse
 from scapy_p0f.consts import MIN_TCP4, MIN_TCP6, MAX_DIST, WinType, TCPFlag

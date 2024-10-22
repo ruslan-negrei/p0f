@@ -1,4 +1,4 @@
-from scapy.modules.six.moves import range
+from scapy.libs.six.moves import range
 
 
 def lparse(line, n, delimiter=":", default=""):
